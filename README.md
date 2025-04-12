@@ -68,9 +68,6 @@ pytest
 pytest tests/test_if_else.py
 ```
 
-## 参考答案
-
-在`answers/`目录下提供了所有练习的参考答案实现。如果你遇到困难或想要检查自己的解决方案，可以参考这些文件。建议先尝试自己解决，只有在需要帮助时才查看参考答案。
 
 ## 评分标准
 
@@ -104,14 +101,5 @@ Python-Training-camp/
 │   ├── test_file_operations.py
 │   ├── test_http_requests.py
 │   └── test_oop_basics.py
-├── answers/               # 参考答案
-│   ├── hello_world.py
-│   ├── data_types.py
-│   ├── ...
-│   ├── string_split.py
-│   ├── regex_match.py
-│   ├── file_operations.py
-│   ├── http_requests.py
-│   └── oop_basics.py
 └── requirements.txt       # 项目依赖
 ``` 
