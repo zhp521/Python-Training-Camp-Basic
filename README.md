@@ -1,5 +1,7 @@
 # Python训练营基础部分
 
+[![Python Basic Tests](https://github.com/用户名/Python-Training-Camp-Basic/actions/workflows/pytest.yml/badge.svg)](https://github.com/用户名/Python-Training-Camp-Basic/actions/workflows/pytest.yml)
+
 本项目包含一系列Python编程练习，涵盖了Python基础知识的各个方面。学生需要补全缺失的代码，并通过测试来验证自己的实现是否正确。
 
 ## 练习内容

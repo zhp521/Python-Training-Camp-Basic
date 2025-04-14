@@ -1,0 +1,189 @@
+name: Python基础训练营测试
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'exercises/**'
+      - 'tests/**'
+      - 'requirements.txt'
+      - '.github/workflows/pytest.yml'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'exercises/**'
+      - 'tests/**'
+  workflow_dispatch:
+    # 允许手动触发工作流
+
+jobs:
+  test:
+    name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        python-version: ["3.8", "3.9", "3.10"]
+
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        fetch-depth: 0  # 获取完整历史以便比较更改
+    
+    - name: 设置 Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+        cache: 'pip'
+    
+    - name: 安装依赖
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install flake8 pytest pytest-cov
+        python -m pip install -r requirements.txt
+      shell: bash
+    
+    - name: 代码质量检查
+      run: |
+        # 仅检查exercises目录中提交的Python文件
+        flake8 exercises --count --select=E9,F63,F7,F82 --show-source --statistics
+      shell: bash
+    
+    - name: 识别修改的文件
+      id: changed-files
+      uses: tj-actions/changed-files@v35
+      with:
+        files: exercises/**/*.py
+    
+    - name: 运行针对变更文件的测试 (Linux)
+      if: steps.changed-files.outputs.any_changed == 'true' && runner.os == 'Linux'
+      run: |
+        echo "检测到修改的文件:"
+        for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+          echo "$file 已修改"
+          # 从文件路径提取测试文件名
+          filename=$(basename "$file")
+          test_file="tests/test_${filename}"
+          if [ -f "$test_file" ]; then
+            echo "运行测试: $test_file"
+            python -m pytest "$test_file" -v
+          else
+            echo "找不到对应的测试文件: $test_file"
+          fi
+        done
+      shell: bash
+      
+    - name: 运行针对变更文件的测试 (Windows)
+      if: steps.changed-files.outputs.any_changed == 'true' && runner.os == 'Windows'
+      run: |
+        echo "检测到修改的文件:"
+        foreach($file in "${{ steps.changed-files.outputs.all_changed_files }}".Split()) {
+          echo "$file 已修改"
+          # 从文件路径提取测试文件名
+          $filename = Split-Path $file -Leaf
+          $test_file = "tests/test_$filename"
+          if (Test-Path $test_file) {
+            echo "运行测试: $test_file"
+            python -m pytest $test_file -v
+          } else {
+            echo "找不到对应的测试文件: $test_file"
+          }
+        }
+      shell: pwsh
+    
+    - name: 运行所有测试并生成覆盖率报告
+      run: |
+        python -m pytest --cov=exercises tests/ --cov-report=xml -v | tee pytest-output.txt
+      shell: bash
+    
+    - name: 生成测试报告摘要 (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        echo "### 测试结果 🧪" >> $GITHUB_STEP_SUMMARY
+        if [ -f pytest-output.txt ]; then
+          passed=$(grep -c "PASSED" pytest-output.txt || echo "0")
+          failed=$(grep -c "FAILED" pytest-output.txt || echo "0")
+          echo "✅ 通过的测试: $passed" >> $GITHUB_STEP_SUMMARY
+          echo "❌ 失败的测试: $failed" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "⚠️ 未找到测试输出文件" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        if [ -f coverage.xml ]; then
+          coverage=$(grep -o "line-rate=\"[0-9.]*\"" coverage.xml | head -1 | grep -o "[0-9.]*" || echo "0")
+          if [ ! -z "$coverage" ]; then
+            coverage=$(printf "%.1f" $(echo "$coverage * 100" | bc))
+            echo "📊 测试覆盖率: ${coverage}%" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "📊 测试覆盖率: 未知" >> $GITHUB_STEP_SUMMARY
+          fi
+        else
+          echo "📊 测试覆盖率: 未生成报告" >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 完成的练习:" >> $GITHUB_STEP_SUMMARY
+        for file in exercises/*.py; do
+          if [ -f "$file" ]; then
+            filename=$(basename "$file")
+            test_file="tests/test_${filename}"
+            if [ -f "$test_file" ]; then
+              if python -m pytest "$test_file" -v > /dev/null 2>&1; then
+                echo "- ✅ $filename" >> $GITHUB_STEP_SUMMARY
+              else
+                echo "- ❌ $filename" >> $GITHUB_STEP_SUMMARY
+              fi
+            else
+              echo "- ⚠️ $filename (无测试文件)" >> $GITHUB_STEP_SUMMARY
+            fi
+          fi
+        done
+      shell: bash
+      
+    - name: 生成测试报告摘要 (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        echo "### 测试结果 🧪" >> $env:GITHUB_STEP_SUMMARY
+        if (Test-Path pytest-output.txt) {
+          $content = Get-Content pytest-output.txt
+          $passed = ($content | Select-String "PASSED" -AllMatches).Matches.Count
+          $failed = ($content | Select-String "FAILED" -AllMatches).Matches.Count
+          echo "✅ 通过的测试: $passed" >> $env:GITHUB_STEP_SUMMARY
+          echo "❌ 失败的测试: $failed" >> $env:GITHUB_STEP_SUMMARY
+        } else {
+          echo "⚠️ 未找到测试输出文件" >> $env:GITHUB_STEP_SUMMARY
+        }
+        
+        if (Test-Path coverage.xml) {
+          $xml = [xml](Get-Content coverage.xml)
+          $coverage = [float]$xml.coverage.LineRate * 100
+          $coverage = [math]::Round($coverage, 1)
+          echo "📊 测试覆盖率: ${coverage}%" >> $env:GITHUB_STEP_SUMMARY
+        } else {
+          echo "📊 测试覆盖率: 未生成报告" >> $env:GITHUB_STEP_SUMMARY
+        }
+        
+        echo "" >> $env:GITHUB_STEP_SUMMARY
+        echo "### 完成的练习:" >> $env:GITHUB_STEP_SUMMARY
+        Get-ChildItem exercises -Filter *.py | ForEach-Object {
+          $filename = $_.Name
+          $test_file = "tests/test_$filename"
+          if (Test-Path $test_file) {
+            $result = python -m pytest $test_file -v 2>&1
+            if ($LASTEXITCODE -eq 0) {
+              echo "- ✅ $filename" >> $env:GITHUB_STEP_SUMMARY
+            } else {
+              echo "- ❌ $filename" >> $env:GITHUB_STEP_SUMMARY
+            }
+          } else {
+            echo "- ⚠️ $filename (无测试文件)" >> $env:GITHUB_STEP_SUMMARY
+          }
+        }
+      shell: pwsh
+    
+    - name: 上传覆盖率报告
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        fail_ci_if_error: false 
