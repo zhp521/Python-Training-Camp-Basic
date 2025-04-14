@@ -1,6 +1,14 @@
 name: Python基础训练营测试
 
 on:
+  # 删除对PR的触发
+  # pull_request:
+  #  branches: [ main, master ]
+  #  paths:
+  #    - 'exercises/**'
+  #    - 'tests/**'
+  
+  # 在任何代码推送时触发
   push:
     branches: [ main, master ]
     paths:
@@ -8,17 +16,63 @@ on:
       - 'tests/**'
       - 'requirements.txt'
       - '.github/workflows/pytest.yml'
-  pull_request:
-    branches: [ main, master ]
-    paths:
-      - 'exercises/**'
-      - 'tests/**'
+  
+  # 允许手动触发
   workflow_dispatch:
-    # 允许手动触发工作流
+    inputs:
+      reason:
+        description: '运行原因'
+        required: false
+        default: '手动测试'
 
 jobs:
+  # 检查是否应该运行测试
+  should-run:
+    runs-on: ubuntu-latest
+    outputs:
+      should-run-tests: ${{ steps.check.outputs.should-run-tests }}
+    steps:
+      - name: 获取源仓库信息
+        id: source-repo
+        run: |
+          # 获取原始仓库的所有者
+          ORIGINAL_OWNER="mozhijiang"
+          echo "original_owner=$ORIGINAL_OWNER" >> $GITHUB_OUTPUT
+        shell: bash
+        
+      - name: 检查是否在源仓库或fork仓库中运行
+        id: check
+        run: |
+          # 如果是手动触发则始终运行
+          if [ "${{ github.event_name }}" == "workflow_dispatch" ]; then
+            echo "should-run-tests=true" >> $GITHUB_OUTPUT
+            echo "原因: 手动触发工作流，运行测试"
+            exit 0
+          fi
+          
+          # 当前仓库所有者
+          CURRENT_OWNER="${{ github.repository_owner }}"
+          # 原始仓库所有者
+          ORIGINAL_OWNER="${{ steps.source-repo.outputs.original_owner }}"
+          
+          echo "当前仓库所有者: $CURRENT_OWNER"
+          echo "原始仓库所有者: $ORIGINAL_OWNER"
+          
+          # 检查是否在fork的仓库中运行
+          if [ "$CURRENT_OWNER" != "$ORIGINAL_OWNER" ]; then
+            echo "should-run-tests=true" >> $GITHUB_OUTPUT
+            echo "原因: 在fork仓库中运行，继续测试"
+          else
+            echo "should-run-tests=false" >> $GITHUB_OUTPUT
+            echo "原因: 在原始仓库中运行，跳过测试"
+          fi
+        shell: bash
+
+  # 主测试任务
   test:
     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
+    needs: should-run
+    if: ${{ needs.should-run.outputs.should-run-tests == 'true' }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
