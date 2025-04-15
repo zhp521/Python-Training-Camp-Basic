@@ -1,26 +1,16 @@
-name: Python基础训练营测试
+name: Python测试
 
-# 定义环境变量，包括原始仓库所有者
+# 定义环境变量
 env:
-  ORIGINAL_OWNER: THINKER-ONLY
+  ORIGINAL_OWNER: 'PythonTrainingCamp'
 
 on:
-  # 删除对PR的触发
-  # pull_request:
-  #  branches: [ main, master ]
-  #  paths:
-  #    - 'exercises/**'
-  #    - 'tests/**'
-  
-  # 使用 github.actor 过滤，只在不是原始仓库所有者时触发
   push:
-    # 不限制分支，让fork后的所有分支都能触发
+    branches: [ "main", "master" ]
     paths:
       - 'exercises/**'
       - 'tests/**'
       - 'requirements.txt'
-    # ⚠️ 重要：添加条件，仅当推送者不是原始仓库所有者时触发
-    if: ${{ github.repository_owner != env.ORIGINAL_OWNER }}
   
   # 允许手动触发
   workflow_dispatch:
@@ -31,8 +21,10 @@ on:
         default: '手动测试'
 
 jobs:
-  # 由于我们已经在触发条件中过滤了，这个任务总是运行测试
+  # 确保测试只在非原始仓库运行
   test:
+    # 添加条件，只在非原始仓库所有者时运行
+    if: ${{ github.repository_owner != env.ORIGINAL_OWNER }}
     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
