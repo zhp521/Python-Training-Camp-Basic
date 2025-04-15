@@ -1,9 +1,5 @@
 name: Python测试
 
-# 定义环境变量
-env:
-  ORIGINAL_OWNER: 'PythonTrainingCamp'
-
 on:
   push:
     branches: [ "main", "master" ]
@@ -24,7 +20,7 @@ jobs:
   # 确保测试只在非原始仓库运行
   test:
     # 添加条件，只在非原始仓库所有者时运行
-    if: ${{ github.repository_owner != env.ORIGINAL_OWNER }}
+    if: github.repository_owner != 'PythonTrainingCamp'
     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
     strategy:
@@ -39,7 +35,7 @@ jobs:
         echo "当前仓库: ${{ github.repository }}"
         echo "仓库所有者: ${{ github.repository_owner }}"
         echo "推送者: ${{ github.actor }}"
-        echo "原始仓库所有者: ${{ env.ORIGINAL_OWNER }}"
+        echo "原始仓库所有者: PythonTrainingCamp"
       shell: bash
     
     - uses: actions/checkout@v3
