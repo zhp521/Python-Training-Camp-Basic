@@ -23,6 +23,10 @@ jobs:
     if: github.repository_owner != 'PythonTrainingCamp'
     name: Python ${{ matrix.python-version }} on ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    # 设置全局环境变量，确保UTF-8编码
+    env:
+      PYTHONIOENCODING: utf-8
+      PYTHONUTF8: 1
     strategy:
       fail-fast: false
       matrix:
