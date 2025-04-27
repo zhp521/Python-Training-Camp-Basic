@@ -128,7 +128,6 @@ jobs:
 
     - name: Calculate Score (Windows)
       id: calculate-score-windows
-      id: calculate-score
       run: |
         if (Select-String -Path pytest-output.txt -Pattern "FAILED", "ERROR" -Quiet) {
           Write-Host "发现测试失败或错误。分数设置为 0。"
