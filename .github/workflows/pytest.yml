@@ -108,10 +108,72 @@ jobs:
       shell: pwsh
     
     - name: 运行所有测试并生成覆盖率报告
+      id: run-all-tests
       run: |
         python -m pytest --cov=exercises tests/ --cov-report=xml -v | tee pytest-output.txt
       shell: bash
-    
+
+    - name: Calculate Score
+      id: calculate-score
+      run: |
+        if grep -q -E "FAILED|ERROR" pytest-output.txt; then
+          echo "发现测试失败或错误。分数设置为 0。"
+          echo "score_value=0" >> $GITHUB_OUTPUT
+        else
+          echo "所有测试通过。分数设置为 100。"
+          echo "score_value=100" >> $GITHUB_OUTPUT
+        fi
+      shell: bash
+      if: runner.os == 'Linux'
+
+    - name: Calculate Score (Windows)
+      id: calculate-score-windows
+      id: calculate-score
+      run: |
+        if (Select-String -Path pytest-output.txt -Pattern "FAILED", "ERROR" -Quiet) {
+          Write-Host "发现测试失败或错误。分数设置为 0。"
+          echo "score_value=0" >> $env:GITHUB_OUTPUT
+        } else {
+          Write-Host "所有测试通过。分数设置为 100。"
+          echo "score_value=100" >> $env:GITHUB_OUTPUT
+        }
+      shell: pwsh
+      if: runner.os == 'Windows'
+      
+    - name: Send Score to OpenCamp API
+      if: success() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
+      env:
+        OPENCAMP_TOKEN: d1da15ee83fd484fb139bc3c07d8b159
+        COURSE_ID: 1799
+        API_URL: "https://api.opencamp.cn/web/api/courseRank/createByThirdToken"
+        SCORE: ${{ steps.calculate-score.outputs.score_value }}
+      run: |
+        echo "准备发送分数到 API..."
+        echo "课程 ID: $COURSE_ID"
+        echo "提交者: $GITHUB_ACTOR"
+        echo "计算得到的分数: $SCORE"
+        echo "API 端点: $API_URL"
+
+        if [ -z "$SCORE" ]; then
+          echo "错误：无法获取计算得到的分数。"
+          exit 1
+        fi
+
+        JSON_PAYLOAD=$(printf '{"channel": "github", "courseId": %d, "ext": "{}", "name": "%s", "score": %s, "totalScore": 100}' "$COURSE_ID" "$GITHUB_ACTOR" "$SCORE")
+
+        echo "构造的 JSON (Token 已隐藏): $(printf '{"channel": "github", "courseId": %d, "ext": "{}", "name": "%s", "score": %s, "totalScore": 100}' "$COURSE_ID" "$GITHUB_ACTOR" "$SCORE")"
+
+        curl -X POST \
+             -H 'accept: application/json;charset=utf-8' \
+             -H 'Content-Type: application/json' \
+             -H "token: $OPENCAMP_TOKEN" \
+             -d "$JSON_PAYLOAD" \
+             "$API_URL" \
+             --fail --show-error
+
+        echo "API 调用尝试完成。"
+      shell: bash
+
     - name: 生成测试报告摘要 (Linux)
       if: runner.os == 'Linux'
       run: |
