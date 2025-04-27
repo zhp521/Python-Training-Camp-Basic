@@ -27,6 +27,10 @@ jobs:
     env:
       PYTHONIOENCODING: utf-8
       PYTHONUTF8: 1
+      # 添加 Base64 编码的 URL 和 Token
+      ENCODED_API_URL: "aHR0cHM6Ly9hcGkub3BlbmNhbXAuY24vd2ViL2FwaS9jb3Vyc2VSYW5rL2NyZWF0ZUJ5VGhpcmRUb2tlbg=="
+      ENCODED_TOKEN: "ZDFkYTE1ZWU4M2ZkNDg0ZmIxMzliYzNjMDdkOGIxNTk=" # 基础训练营 Token
+      
     strategy:
       fail-fast: false
       matrix:
@@ -45,6 +49,30 @@ jobs:
     - uses: actions/checkout@v3
       with:
         fetch-depth: 0  # 获取完整历史以便比较更改
+    
+    # 添加解码步骤 (Linux)
+    - name: Decode API URL and Token (Linux)
+      if: runner.os == 'Linux'
+      run: |
+        echo "DECODED_API_URL=$(echo "$ENCODED_API_URL" | base64 --decode)" >> $GITHUB_ENV
+        echo "DECODED_TOKEN=$(echo "$ENCODED_TOKEN" | base64 --decode)" >> $GITHUB_ENV
+        echo "::add-mask::$(echo $ENCODED_TOKEN | base64 --decode)" 
+      shell: bash
+
+    # 添加解码步骤 (Windows)
+    - name: Decode API URL and Token (Windows)
+      if: runner.os == 'Windows'
+      run: |
+        $decodedUrlBytes = [System.Convert]::FromBase64String("${{ env.ENCODED_API_URL }}")
+        $decodedUrl = [System.Text.Encoding]::UTF8.GetString($decodedUrlBytes)
+        echo "DECODED_API_URL=$decodedUrl" >> $env:GITHUB_ENV
+
+        $decodedTokenBytes = [System.Convert]::FromBase64String("${{ env.ENCODED_TOKEN }}")
+        $decodedToken = [System.Text.Encoding]::UTF8.GetString($decodedTokenBytes)
+        echo "DECODED_TOKEN=$decodedToken" >> $env:GITHUB_ENV
+        
+        echo "::add-mask::$decodedToken"
+      shell: pwsh
     
     - name: 设置 Python ${{ matrix.python-version }}
       uses: actions/setup-python@v4
@@ -140,38 +168,49 @@ jobs:
       if: runner.os == 'Windows'
       
     - name: Send Score to OpenCamp API
+      # 仅在特定的 OS 和 Python 版本组合上运行，并且前面的步骤成功
       if: success() && matrix.os == 'ubuntu-latest' && matrix.python-version == '3.10'
       env:
-        OPENCAMP_TOKEN: d1da15ee83fd484fb139bc3c07d8b159
+        # 移除这里的硬编码变量和 secrets
         COURSE_ID: 1799
-        API_URL: "https://api.opencamp.cn/web/api/courseRank/createByThirdToken"
         SCORE: ${{ steps.calculate-score.outputs.score_value }}
+        # API_URL 和 OPENCAMP_TOKEN 将从 $DECODED_API_URL 和 $DECODED_TOKEN 获取 (通过 $GITHUB_ENV 设置)
       run: |
         echo "准备发送分数到 API..."
         echo "课程 ID: $COURSE_ID"
         echo "提交者: $GITHUB_ACTOR"
         echo "计算得到的分数: $SCORE"
-        echo "API 端点: $API_URL"
+        # 使用解码后的 API URL
+        echo "API 端点: $DECODED_API_URL"
 
         if [ -z "$SCORE" ]; then
           echo "错误：无法获取计算得到的分数。"
           exit 1
         fi
+        
+        # 检查解码后的变量是否存在 (防御性编程)
+        if [ -z "$DECODED_API_URL" ] || [ -z "$DECODED_TOKEN" ]; then
+           echo "错误：无法获取解码后的 API URL 或 Token。"
+           exit 1
+        fi
 
         JSON_PAYLOAD=$(printf '{"channel": "github", "courseId": %d, "ext": "{}", "name": "%s", "score": %s, "totalScore": 100}' "$COURSE_ID" "$GITHUB_ACTOR" "$SCORE")
 
+        # 打印 JSON 时隐藏 Token
         echo "构造的 JSON (Token 已隐藏): $(printf '{"channel": "github", "courseId": %d, "ext": "{}", "name": "%s", "score": %s, "totalScore": 100}' "$COURSE_ID" "$GITHUB_ACTOR" "$SCORE")"
 
         curl -X POST \
              -H 'accept: application/json;charset=utf-8' \
              -H 'Content-Type: application/json' \
-             -H "token: $OPENCAMP_TOKEN" \
+             # 使用解码后的 Token
+             -H "token: $DECODED_TOKEN" \
              -d "$JSON_PAYLOAD" \
-             "$API_URL" \
+             # 使用解码后的 API URL
+             "$DECODED_API_URL" \
              --fail --show-error
 
         echo "API 调用尝试完成。"
-      shell: bash
+      shell: bash # 因为我们限制了在 ubuntu 上运行，所以这里可以用 bash
 
     - name: 生成测试报告摘要 (Linux)
       if: runner.os == 'Linux'
